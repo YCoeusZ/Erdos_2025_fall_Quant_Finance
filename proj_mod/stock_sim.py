@@ -235,7 +235,6 @@ class Bates_model_risk_free():
         return self.call_MC_
     
     def bates_CF(self, u, time_len: float=1): 
-        ###### There might be issue here 
         
         kappa=self.params_.vol.kappa
         rho=self.params_.vol.rho
@@ -254,7 +253,6 @@ class Bates_model_risk_free():
         i=1j
         alpha=-u_arr**2-i*u_arr
         beta=kappa-rho*i*sigma*u_arr
-        # gamma=(sigma**2)/2
         d_eu=np.sqrt(beta**2 - alpha*sigma**2)
         g_eu=(beta - d_eu)/(beta + d_eu)
         
@@ -270,11 +268,8 @@ class Bates_model_risk_free():
         return phi 
     
     def bates_est_call_payoff_CF(self, strike_price: Union[np.ndarray,float], u_max: float = 200, du: float = 0.01, time_len: float = 1): 
-        ###### There might be issue here 
         
         u=np.arange(start=du, stop=u_max+du, step=du)
-        
-        # u_arr=u[...,None] #Make it a column vector, so that strike price is the other dimension. 
         
         i=1j
         
