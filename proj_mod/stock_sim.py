@@ -4,6 +4,7 @@ from typing import Optional, Union
 from numpy.typing import ArrayLike
 import matplotlib.pyplot as plt 
 from scipy.integrate import quad
+import pandas as pd 
 
 @dataclass
 class Vol_params: 
@@ -113,10 +114,12 @@ class Bates_model_risk_free():
             print("Volatilities created. ") 
         return self 
     
-    def bates_create_paths(self, n_paths: int, n_steps: int=252, time_len: float=1, seed: Optional[int]=None, verbose=False, from_start=False): 
+    def bates_create_paths(self, n_paths: int, n_steps: int=252, time_len: float=1, seed: Optional[int]=None, verbose=False, from_start=True): 
         if from_start: 
             if verbose: 
                 print("Creating data from the start. ")
+            self.Dt_=time_len/n_steps 
+            self.create_Brownian_pair(n_paths=n_paths, n_steps=n_steps, time_len=time_len, seed=seed, verbose=verbose)
             self.create_vol(n_paths=n_paths, n_steps=n_steps, time_len=time_len, seed=seed, verbose=verbose)
             self.create_jump(n_paths=n_paths, n_steps=n_steps, time_len=time_len, seed=seed, verbose=verbose) 
         else: 
@@ -201,18 +204,18 @@ class Bates_model_risk_free():
     def bates_est_call_payoff_MC(self, strike_price: Union[np.ndarray, float], time_len: float=1, save_payoff: bool=False): 
         if not hasattr(self, "S_"): 
             ValueError("The Bates stock path(s) do(es) not exist, please create them first. ")
-        if not hasattr(self, "call_MC_"): 
-            self.call_MC_=dict()
+        # if not hasattr(self, "call_MC_"): 
+        #     self.call_MC_=dict()
         r=self.params_.market.r 
         S_T=self.S_[:,-1]
         if type(strike_price) == np.ndarray: 
             if len(strike_price.shape)>1: 
                 ValueError("The algorithm takes only 1d array or float for strike price at this moment. ")
             K=strike_price[...,None]
-            key=tuple(strike_price)
+            # key=tuple(strike_price)
         else: 
             K=strike_price
-            key=strike_price
+            # key=strike_price
         payoff=np.maximum(S_T-K, 0.0) 
         
         disc=np.exp(-r*time_len)
@@ -229,9 +232,28 @@ class Bates_model_risk_free():
             C0_mu=disc*payoff.mean()
             C0_std=disc*(payoff.std(ddof=1)/np.sqrt(n_paths))
         if save_payoff: 
-            self.call_MC_[key]=(C0_mu, C0_std, disc*payoff)
+            self.call_MC_=pd.DataFrame({"K": np.asarray(strike_price, dtype=float), 
+                                        "C_0_mu": C0_mu, 
+                                        "C_0_std": C0_std,
+                                        # "disc_payoffs": disc*payoff
+                                        })
+            
+            self.call_MC_payoff_=dict(zip(np.asarray(strike_price, dtype=float), disc*payoff))
+            
+            # self.call_MC_[key]={
+            #     "C_0_mu": C0_mu, 
+            #     "C_0_std": C0_std, 
+            #     "disc_payoffs": disc*payoff
+            #     }    #(C0_mu, C0_std, disc*payoff)
         else: 
-            self.call_MC_[key]=(C0_mu, C0_std)
+            self.call_MC_=pd.DataFrame({"K": np.asarray(strike_price, dtype=float), 
+                                        "C_0_mu": C0_mu, 
+                                        "C_0_std": C0_std})
+            
+            # self.call_MC_[key]={
+            #     "C_0_mu": C0_mu, 
+            #     "C_0_std": C0_std
+            #     }  
         return self.call_MC_
     
     def bates_CF(self, u, time_len: float=1): 
@@ -328,17 +350,61 @@ class Bates_model_risk_free():
             P_2=P_2[0]
             C_0=C_0[0]
             
-            key=strike_price
-        else: 
-            key=tuple(strike_price)
+            # key=strike_price
+        # else: 
+            # key=tuple(strike_price)
             
         if not hasattr(self, "call_CF_"): 
             self.call_CF_=dict()
             
-        self.call_CF_[key]=(P_1,P_2,C_0)
+        self.call_CF_=pd.DataFrame({"K": np.asarray(strike_price, dtype=float), 
+                                    "P_1": P_1,
+                                    "P_2": P_2, 
+                                    "C_0": C_0
+                                    })
+            
+        # self.call_CF_[key]={
+        #     "P_1": P_1,
+        #     "P_2": P_2, 
+        #     "C_0": C_0
+        #     }      #(P_1,P_2,C_0)
         
         assert abs(self.bates_CF(0.0, time_len) - 1.0) < 1e-12
         assert abs(self.bates_CF(-1j, time_len) - s0*np.exp((r-q)*time_len)) < 1e-8
         
         return self.call_CF_
         
+    def bates_est_call_Delta_CF(self, strike_price: Union[np.ndarray,float], u_max: float = 200, du: float = 0.01, time_len: float = 1): 
+        
+        u=np.arange(start=du, stop=u_max+du, step=du)
+        
+        i=1j
+        
+        # s0=self.params_.s0
+        q=self.params_.market.q 
+        # r=self.params_.market.r 
+        
+        K=np.asarray(strike_price, dtype=float).ravel()
+        k=np.log(K)
+        
+        # phi_eu = self.bates_CF(u=u, time_len=time_len)
+        phi_eumi=self.bates_CF(u=u-i, time_len=time_len)
+        phi_mi=self.bates_CF(u=-i, time_len=time_len)
+        phi_mi = float(np.real_if_close(phi_mi))
+        
+        phase=np.exp(-i * np.outer(u, k))
+        
+        # f_1=np.real((np.exp(-i*u_arr*k)*phi_eumi)/(i*u_arr*phi_mi))
+        f_1 = np.real(phase * (phi_eumi[...,None]/(i * u[...,None] * phi_mi)))
+        I_1 = du * (0.5*f_1[0] + f_1[1:-1].sum(axis=0) + 0.5*f_1[-1])
+        # P_1=0.5 + (1/np.pi)*np.trapezoid(y=f_1, x=u, axis=0)
+        P_1=0.5 + (1/np.pi)*I_1
+        
+        call_Delta=np.exp(-q*time_len)*P_1 
+        
+        self.call_Delta_CF_=pd.DataFrame({
+                                        "K": np.asarray(strike_price, dtype=float), 
+                                        "call_Delta": call_Delta 
+        })
+        
+        return self.call_Delta_CF_
