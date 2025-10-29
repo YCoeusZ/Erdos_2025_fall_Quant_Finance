@@ -408,3 +408,94 @@ class Bates_model_risk_free():
         })
         
         return self.call_Delta_CF_
+    
+    def _bates_A1_(self, u, times): 
+        u_arr=np.asarray(u, np.complex128).ravel() #(1,num u) row vector
+        times_arr=np.asarray(times, float).ravel()[...,None] #(num times, 1) column vector 
+        
+        kappa=self.params_.vol.kappa
+        rho=self.params_.vol.rho
+        sigma=self.params_.vol.sigma
+        theta=self.params_.vol.theta
+        v0=self.params_.vol.v0
+        r=self.params_.market.r
+        q=self.params_.market.q 
+        lam_J=self.params_.jump.lam_J
+        mu_J=self.params_.jump.mu_J
+        sig_J=self.params_.jump.sig_J
+        kappa_J=np.exp(mu_J + 0.5*(sig_J**2))-1 
+        
+        i=1j
+        drift=(r-q - lam_J * kappa_J)
+        ratio_drift=np.exp(i * u_arr * (drift * times_arr)) #(num times, num u)
+        
+        def CDJ_at(w): 
+            alpha = -(w**2 + i* w)
+            beta= kappa - rho*sigma*i*w 
+            d_eu=np.sqrt(beta**2 - alpha*sigma**2)
+            g_eu=(beta - d_eu)/(beta + d_eu)
+            
+            exp_mdT=np.exp(-d_eu*times_arr)
+            one_m_gexp_mdt = 1-g_eu*exp_mdT
+            one_m_g = 1-g_eu
+            C_eu=((kappa*theta)/(sigma**2))*((beta - d_eu)*times_arr - 2*np.log((one_m_gexp_mdt)/(one_m_g)))
+            D_eu=((beta - d_eu)*(1-exp_mdT))/(sigma**2 * (one_m_gexp_mdt))
+            
+            J_eu = np.exp(lam_J * times_arr * (np.exp(i*w*mu_J - (w**2 * sig_J**2)/2)-1)) 
+            
+            return C_eu, D_eu, J_eu 
+        
+        # alpha=-u_arr**2-i*u_arr
+        # beta=kappa-rho*i*sigma*u_arr
+        # d_eu=np.sqrt(beta**2 - alpha*sigma**2)
+        # g_eu=(beta - d_eu)/(beta + d_eu)
+        
+        # exp_mdT=np.exp(-d_eu*times_arr)
+        # one_m_gexp_mdt = 1-g_eu*exp_mdT
+        # one_m_g = 1-g_eu
+        
+        # C_eu=((kappa*theta)/(sigma**2))*((beta - d_eu)*times_arr - 2*np.log((one_m_gexp_mdt)/(one_m_g)))
+        # D_eu=((beta - d_eu)*(1-exp_mdT))/(sigma**2 * (one_m_gexp_mdt))
+        
+        C_enu, D_enu, J_enu = CDJ_at(u_arr-i)
+        C_de, D_de, J_de = CDJ_at(-i) 
+        
+        # phi_u=np.exp((i*u_arr+1)*(r-q-lam_J*kappa_J)*times_arr + C_eu + D_eu*v0 + lam_J*times_arr*(np.exp(i*u_arr*mu_J - (u_arr**2 * sig_J**2)/2)-1)) # (num times, num u)
+        # phi_d=np.exp((r-q-lam_J*kappa_J)*times_arr + C_eu + D_eu*v0 + lam_J*times_arr*(np.exp(i*u_arr*mu_J - (u_arr**2 * sig_J**2)/2)-1)) #(num times, 1)
+        
+        # A_1=(phi_u)/(phi_d) #(num times, num u)
+        
+        A_1 = (ratio_drift * np.exp((C_enu-C_de) + (D_enu-D_de)*v0 ) * (J_enu/J_de))/(i*u_arr) #(num times, num u)
+        
+        return A_1
+    
+    def _bates_Call_Delta_mat_all_step_(self, strike_price: Union[np.ndarray,float], u_max: float = 100, du: float = 0.1, time_len: float = 1): 
+        u=np.arange(start=du, stop=u_max+du, step=du)
+        i=1j
+        
+        K=np.asarray(strike_price, dtype=float).ravel()  
+        k=np.log(K)
+        
+        steps=self.S_.shape[-1]
+        # paths=self.S_.shape[0]
+        
+        times_arr=np.linspace(start=0, stop=time_len, num=steps)[::-1][:-1] #(1, steps -1) to avoid the last day 
+        # print(times_arr)
+        log_cur_spots=np.log(self.S_[:, :-1]) #(num paths, num steps -1)
+        
+        k=k[:, None, None] * np.ones(shape=log_cur_spots.shape, dtype=k.dtype) #(num k, num paths, num step -1) 
+        zeta=k-log_cur_spots #(num k, num paths, num step -1) 
+        e_zeta=np.exp(-i * u[None, None, None, :]* zeta[..., None]) #(num k, num paths, num step -1, num u) 
+        
+        A_1=self._bates_A1_(u=u,times=times_arr) #(num step -1, num u)
+        
+        P1_intgrant=np.real(e_zeta*A_1) #(num k, num paths, num step -1, num u) 
+        
+        I_1= du * (0.5*P1_intgrant[..., 0] + P1_intgrant[..., 1:-1].sum(axis=-1) + 0.5*P1_intgrant[..., -1]) #(num k, num path, num step -1)
+        P_1=0.5 + (1/np.pi) * I_1 
+        self.call_Delta_all_steps_=np.exp(-self.params_.market.q * times_arr[None, None, :]) * P_1 #(num k, num path, num step -1)
+        
+        return self 
+        
+        
+        
