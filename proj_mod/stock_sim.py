@@ -496,6 +496,36 @@ class Bates_model_risk_free():
         self.call_Delta_all_steps_=np.exp(-self.params_.market.q * times_arr[None, None, :]) * P_1 #(num k, num path, num step -1)
         
         return self 
+    
+    def bates_hedged_stock_income_all_step(self, strike_price: Union[np.ndarray,float], u_max: float = 100, du: float = 0.1, time_len: float = 1): 
+        
+        if not hasattr(self, "call_Delta_all_steps_"): 
+            self._bates_Call_Delta_mat_all_step_(strike_price= strike_price, u_max=u_max, du=du, time_len=time_len) 
+        
+        steps=self.S_.shape[-1]
+            
+        time_steps=np.linspace(start=0, stop=time_len, num=steps)
+        time_steps=time_steps[None,None,...]
+        
+        r=self.params_.market.r
+        q=self.params_.market.q 
+        
+        K=np.asarray(strike_price, dtype=float).ravel()  
+        # k=np.log(K)
+        
+        paths=self.S_[None, ...] * np.ones(shape=(len(K),1,1), dtype=self.S_.dtype) #(num k, num paths, num steps) 
+        
+        stock_trade_profit_discounted = (paths[:,:, 1:] - paths[:, :, 0:-1] * np.exp(r*self.Dt_))*self.call_Delta_all_steps_[:,:,:]*np.exp(-r*time_steps[:,:,1:]) 
+        
+        # clip_delta=np.clip(a=self.call_Delta_all_steps_, a_min=0, a_max=None)
+        
+        stock_dividend_profit = q*paths[:,:,:-1]*self.call_Delta_all_steps_[:,:,:]*self.Dt_*np.exp(-r*time_steps[:,:,1:]) 
+        
+        self.bates_hedged_stock_income_all_step_=(stock_dividend_profit+stock_trade_profit_discounted).sum(axis=-1)
+        
+        return self 
+        
+         
         
         
         
