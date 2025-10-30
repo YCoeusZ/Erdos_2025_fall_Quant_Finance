@@ -201,6 +201,18 @@ class Bates_model_risk_free():
         plt.title("Risk free Bates model simulation")
         plt.show()
         
+    def bates_call_payoffs(self, strike_price: Union[np.ndarray, float], time_len: float=1): 
+        if not hasattr(self, "S_"): 
+            ValueError("The Bates stock path(s) do(es) not exist, please create them first. ")
+        r=self.params_.market.r 
+        S_T=self.S_[:,-1]
+        K=np.asarray(strike_price, dtype=float).ravel()[:, None] 
+        payoff=np.maximum(S_T-K, 0.0) 
+        disc=np.exp(-r*time_len)
+        
+        self.bates_call_payoffs_=disc*payoff 
+        return self
+        
     def bates_est_call_payoff_MC(self, strike_price: Union[np.ndarray, float], time_len: float=1, save_payoff: bool=False): 
         if not hasattr(self, "S_"): 
             ValueError("The Bates stock path(s) do(es) not exist, please create them first. ")
