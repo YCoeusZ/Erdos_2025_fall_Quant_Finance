@@ -1,0 +1,52 @@
+Welcome to the demenstration of Bates Model simulations. 
+
+In this demonstration, we will discuss: 
+1) The SDE of the Bates model. 
+2) The simulation of stock paths according to the Bates model. 
+3) The calculation of (discounted) expected call option payoff according to both the Monte Carlo, and the Characteristic function methods. 
+4) The calculation of call Delta 
+5) Simulation of hedging 
+
+* Move page to Bates model SDE 
+1) The key difference between the Bates SDE and the Heston SDE is the addition of the Jumping impact whose frequency is simulated according to a Poisson process, and magnitude (of each jump) is simulated according to normal distributions. 
+
+* Move page to "Solving" SDE 
+2) In simulating the paths, we focus on the Heston part first. We realize the (discrete change of) Brownian Driver pair (Delta W1, Delta W2) as a bi-normal distribution with given covariance matrix. Then, one can simulate the pair as linear combinations of two i.i.d. standard normal distribution involving the Delta t, and the covariance matrix. 
+
+* Move page to creating the volatility 
+After which, we can construct the simulated volatility at time steps, and then the Heston stock paths accordingly. 
+
+* Move page to jump simulation 
+We simulate the jumps as compounded jumps (which have normal distributions) between consecutive time steps. All that remains is to add the jump impacts to the Heston model to receive the Bates model. 
+
+* Move page to graph of stock paths 
+Here is an example of the simluated paths. 
+
+* Move page to Monte Carlo method 
+3) In calculation of the (discounted) expected call option payoff, Monte Carlo is straight forward - we take it as the sample mean of our simulations. 
+
+* Move page to distribution graphs 
+Here is an example of distribution of estimated payoffs at different strike prices. 
+
+* Move page to closed formula calculation 
+The calculation of a closed formula is more involved, the two key tricks are: 
+1, Use the linearity of the expected value to change the question into calculation of two expected values involving identifier functions. 
+2, Fourier inverting the Fourier form of the Heaviside step function (a type of identifier function) to change the identifier functions into an integral, which will involve characteristic functions after we apply expected value to said integrals. 
+
+* Move page to simulation characteristic function method 
+We cite various papers for a practical calculation of the characteristic function, and we opt to use the trapzoid rule to approximate the integrals to receive the approximation of the (discounted) expected call option payoff. 
+
+* Move page to calculating the Delta 
+4) One can receive a closed form of the call option Delta according to the characteristic function method as well, the key is to realize the "money-ness" M:=log(S_T/S_0) does not depend on S_0, and that the Dirac delta function (being the derivative of the Heaviside step function) has the shifting property. 
+
+* Move page to calculating Delta for all steps 
+To calculate the hedging value at different time steps, it would be extremely time consuming if we were to recalculate everything for each path, luckily, one can do a little math and notice that the Delta does not really care about the current stock value. 
+
+5) We will demonstrate a running of simulation of hedging in action with two different strick prices (100, and 110), and 1000 paths. The simulation of hedging is made efficient by calculating the Delta values efficiently with method previously mentioned. 
+* Run the codes 
+
+* Move page to distribution graphs 
+We will demontrate, with histograms, the liability of call option saller according to the simulations. Where to first histograms is for strike price 100, and the second for 110. 
+
+* Move page to distribution graphs 
+And the expected profit for the saller if the call options were priced according to the (discounted) expected payoff. For the two strike prices again. 
